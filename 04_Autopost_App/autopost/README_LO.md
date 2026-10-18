@@ -98,6 +98,30 @@ sudo systemctl enable --now autopost-worker
 30 11 * * * cd /path/to/ainsteinx && /path/to/venv/bin/python manage.py autopost_daily_prompt
 ```
 
+## 2.1 ນຳເຂົ້າຕອນທັງໝົດຈາກໂຟນເດີ Ainsteinx-Pass-It-On-Project
+
+```bash
+python manage.py autopost_import /path/to/Ainsteinx-Pass-It-On-Project --dry-run   # ເບິ່ງກ່ອນ
+python manage.py autopost_import /path/to/Ainsteinx-Pass-It-On-Project             # ເຂົ້າຄິວແທ້
+```
+
+ອ່ານ 3 ໂຟນເດີ:
+
+| ໂຟນເດີ | ໃຊ້ເຮັດຫຍັງ |
+| --- | --- |
+| `01_Episodes/EPnn_…/` | ວິດີໂອ, ຫົວຂໍ້/ຄຳອະທິບາຍ/ແຮຊແທັກ ຈາກ `*_social_post.txt` ຫຼື `*_title_description.txt` (ຖ້າບໍ່ມີ ໃຊ້ບົດພາກ `*_voiceover.srt`) |
+| `05_Plan/episode_log.json` | ໝວດຂອງແຕ່ລະຕອນ |
+| `06_Subtitles_TH_upload/` | ຊັບໄຕເຕີ້ລ໌ໄທ 1 ໄຟລ໌ຕໍ່ຕອນ — ອັບຂຶ້ນ YouTube ຫຼັງໂພສ |
+
+ຄວາມຍາວຂອງຊັບໄທ ເປັນຕົວກຳນົດວ່າຈະໂພສວິດີໂອເວີຊັນໃດ (ເຊັ່ນ EP.4 = ເວີຊັນ 3D 43 ວິ, EP.7 = v2).
+ໄຟລ໌ `*_noaudio` ບໍ່ຖືກເລືອກ. ຕອນທີ່ບໍ່ມີຫົວຂໍ້ (ເຊັ່ນ ແມ່ນ້ຳຂອງ) ຈະເຂົ້າເປັນ **ຮ່າງ** — ເຕີມຫົວຂໍ້ໃນ admin ກ່ອນ.
+
+ແລ່ນຊ້ຳໄດ້ ບໍ່ນຳເຂົ້າຊ້ຳ (ຈັບຄູ່ຕາມຊື່ໂຟນເດີ ຫຼື ເລກຕອນ). ໃສ່ `--update` ເພື່ອອັບເດດຫົວຂໍ້ ແລະ ຊັບໄທ
+ຂອງຄລິບທີ່ຍັງລໍຖ້າໃນຄິວ (ວິດີໂອເດີມບໍ່ປ່ຽນ).
+
+> ຊັບໄຕເຕີ້ລ໌ຕ້ອງໃຊ້ສິດ `youtube.force-ssl` — ຖ້າເຊື່ອມ YouTube ໄວ້ກ່ອນອັບເດດນີ້ ໃຫ້ກົດ **ເຊື່ອມຕໍ່** YouTube ໃໝ່ 1 ເທື່ອ.
+> ຖ້າໃສ່ຊັບບໍ່ໄດ້ ວິດີໂອຍັງໂພສປົກກະຕິ ແລະ ແຈ້ງເຫດຜົນໃນຜົນການໂພສ.
+
 ## 3. ເຊື່ອມຕໍ່ແພລັດຟອມໂພສ
 
 Redirect URI ທີ່ຕ້ອງໃສ່ໃນແຕ່ລະ console:
@@ -112,7 +136,7 @@ Redirect URI ທີ່ຕ້ອງໃສ່ໃນແຕ່ລະ console:
 
 ### YouTube
 1. [Google Cloud Console](https://console.cloud.google.com/) → ສ້າງ project → ເປີດ **YouTube Data API v3**.
-2. **OAuth consent screen**: External, ໃສ່ scope `youtube.upload`. ⚠️ ກົດ **Publish app (In production)** — ຖ້າຢູ່ໂໝດ Testing, refresh token ຈະໝົດອາຍຸທຸກ 7 ມື້. ຕອນລັອກອິນຈະເຫັນ "unverified app" ໃຫ້ກົດ Advanced → ດຳເນີນການຕໍ່ (ໃຊ້ກັບບັນຊີຕົນເອງໄດ້).
+2. **OAuth consent screen**: External, ໃສ່ scope `youtube.upload` ແລະ `youtube.force-ssl` (ສຳລັບໃສ່ຊັບໄຕເຕີ້ລ໌ໄທ). ⚠️ ກົດ **Publish app (In production)** — ຖ້າຢູ່ໂໝດ Testing, refresh token ຈະໝົດອາຍຸທຸກ 7 ມື້. ຕອນລັອກອິນຈະເຫັນ "unverified app" ໃຫ້ກົດ Advanced → ດຳເນີນການຕໍ່ (ໃຊ້ກັບບັນຊີຕົນເອງໄດ້).
 3. **Credentials** → OAuth client ID → Web application → ໃສ່ Redirect URI ຂ້າງເທິງ.
 
 ### Facebook Page
@@ -158,5 +182,5 @@ Redirect URI ທີ່ຕ້ອງໃສ່ໃນແຕ່ລະ console:
 ## 6. ທົດສອບ
 
 ```bash
-python manage.py test autopost       # 21 tests: webhook signatures, bot flow, worker retries, uploads (mocked)
+python manage.py test autopost       # 28 tests: webhook signatures, bot flow, worker retries, uploads, Thai subtitles, folder import (mocked)
 ```

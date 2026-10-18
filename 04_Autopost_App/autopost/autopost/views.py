@@ -55,7 +55,14 @@ class ClipForm(forms.ModelForm):
     class Meta:
         model = Clip
         fields = ["video", "subtitle_th", "episode", "category", "title", "description", "hashtags", "queue_position"]
-        widgets = {"description": forms.Textarea(attrs={"rows": 3})}
+        widgets = {"description": forms.Textarea(attrs={"rows": 3}),
+                   "subtitle_th": forms.ClearableFileInput(attrs={"accept": ".srt"})}
+
+    def clean_subtitle_th(self):
+        f = self.cleaned_data.get("subtitle_th")
+        if f and not f.name.lower().endswith(".srt"):
+            raise forms.ValidationError("ຊັບໄຕເຕີ້ລ໌ຕ້ອງເປັນໄຟລ໌ .srt")
+        return f
 
 
 @staff_member_required

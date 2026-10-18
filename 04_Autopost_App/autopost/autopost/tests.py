@@ -289,6 +289,30 @@ class PublisherTests(TestCase):
         self.assertEqual(post.call_args.kwargs["json"]["status"]["selfDeclaredMadeForKids"], False)
         self.assertEqual(put.call_args_list[1].kwargs["headers"]["Content-Range"], "bytes 2048-2999/3000")
 
+    def _youtube_with_subtitle(self, caption_resp):
+        acc = SocialAccount.objects.create(platform="youtube", access_token="t",
+                                           expires_at=timezone.now() + timezone.timedelta(hours=1))
+        self.clip.subtitle_th.save("ep.srt", ContentFile(b"1\n00:00:00,000 --> 00:00:01,000\nhi\n"))
+        posts = iter([Resp(200, headers={"Location": "https://loc"}), caption_resp])
+        with mock.patch.object(yt.session, "post", side_effect=lambda *a, **k: next(posts)) as post, \
+                mock.patch.object(yt.session, "put", return_value=Resp(200, {"id": "abc"})):
+            res = yt.YouTubePublisher().publish(self.clip, acc)
+        return res, post
+
+    def test_youtube_attaches_thai_subtitle(self):
+        res, post = self._youtube_with_subtitle(Resp(200, {"id": "cap"}))
+        call = post.call_args_list[1]
+        self.assertEqual(call.args[0], yt.CAPTIONS_URL)
+        meta = json.loads(call.kwargs["files"]["metadata"][1])
+        self.assertEqual(meta["snippet"], {"videoId": "abc", "language": "th", "name": "ไทย", "isDraft": False})
+        self.assertIn(b"hi", call.kwargs["files"]["media"][1])
+        self.assertIn("ຊັບໄຕເຕີ້ລ໌ໄທແລ້ວ", res.note)
+
+    def test_youtube_subtitle_failure_keeps_the_post(self):
+        res, _ = self._youtube_with_subtitle(Resp(403, {"error": "insufficientPermissions"}))
+        self.assertEqual(res.url, "https://youtube.com/shorts/abc")
+        self.assertIn("ເຊື່ອມຕໍ່ YouTube ໃໝ່", res.note)
+
     def test_youtube_refreshes_expired_token(self):
         acc = SocialAccount.objects.create(platform="youtube", access_token="old", refresh_token="r",
                                            expires_at=timezone.now() - timezone.timedelta(minutes=1))
@@ -334,3 +358,98 @@ class DashboardTests(TestCase):
         self.assertIn("redirect_uri=https%3A%2F%2Fainsteinx.com%2Fautopost%2Foauth%2Ftiktok%2Fcallback%2F", r["Location"])
         r = self.client.get("/autopost/oauth/tiktok/callback/", {"code": "c", "state": "wrong"})
         self.assertEqual(r.status_code, 400)
+
+
+def fake_mp4(path, seconds):
+    """Smallest file mp4_duration() can read: ftyp + moov/mvhd (version 0)."""
+    import struct
+    mvhd_body = bytes(4) + bytes(8) + struct.pack(">II", 1000, int(seconds * 1000)) + bytes(80)
+    mvhd = struct.pack(">I4s", 8 + len(mvhd_body), b"mvhd") + mvhd_body
+    moov = struct.pack(">I4s", 8 + len(mvhd), b"moov") + mvhd
+    ftyp = struct.pack(">I4s", 16, b"ftyp") + b"isom" + bytes(4)
+    path.write_bytes(ftyp + moov)
+
+
+def fake_srt(path, end, lines):
+    blocks = [f"{i}\n00:00:00,000 --> 00:00:{end:06.3f}\n{text}\n".replace(".", ",", 1)
+              for i, text in enumerate(lines, 1)]
+    path.write_text("\n".join(blocks), encoding="utf-8")
+
+
+@override_settings(**SETTINGS)
+class ImportTests(TestCase):
+    def setUp(self):
+        from pathlib import Path
+        self.root = Path(tempfile.mkdtemp())
+        eps = self.root / "01_Episodes"
+        ep4 = eps / "EP04_Eiffel"
+        ep4.mkdir(parents=True)
+        fake_mp4(ep4 / "EP04_Eiffel_3D_9x16_voice.mp4", 42.5)
+        fake_mp4(ep4 / "EP04_Eiffel_60s_voice_music.mp4", 60)
+        fake_mp4(ep4 / "EP04_Eiffel_3D_9x16_noaudio.mp4", 42.5)
+        (ep4 / "EP04_social_post.txt").write_text(
+            "YouTube Title:\nຍອດຫໍໄອເຟລ ເຄື່ອນທີ່ທຸກມື້! #shorts\n\nDescription:\nເຫຼັກຂະຫຍາຍຕົວ\n"
+            "#ບອກຕໍ່ຄວາມຮູ້ #ຮູ້ບໍ່EP4\n\nTikTok:\nບໍ່ໃຊ້ #fyp\n", encoding="utf-8")
+        ep1 = eps / "EP01_Venus"
+        ep1.mkdir()
+        fake_mp4(ep1 / "EP01_Venus_voice.mp4", 40)
+        fake_srt(ep1 / "EP01_voiceover.srt", 38.6,
+                 ["ຮູ້ບໍ່ວ່າ 1 ມື້ ຍາວກວ່າ 1 ປີ?", "ນັ້ນຄື ດາວພະສຸກ.", "ຖ້າຮູ້ແລ້ວ ຢ່າລືມ ບອກຕໍ່ ໃຫ້ໝູ່ເດີ້!"])
+        extra = eps / "Extra_Mekong_MapStory"
+        extra.mkdir()
+        fake_mp4(extra / "Mekong_MapStory_9x16.mp4", 51)
+        subs = self.root / "06_Subtitles_TH_upload"
+        subs.mkdir()
+        fake_srt(subs / "EP04_3D_43s_subtitle_TH.srt", 42.3, ["ยอดหอไอเฟล"])
+        plan = self.root / "05_Plan"
+        plan.mkdir()
+        (plan / "episode_log.json").write_text(json.dumps({"done": [
+            {"ep": 1, "cat": "ອາວະກາດ"}, {"ep": 4, "cat": "ວິສະວະກຳ"}]}), encoding="utf-8")
+
+    def run_import(self, *args):
+        from io import StringIO
+        from django.core.management import call_command
+        out = StringIO()
+        call_command("autopost_import", str(self.root), *args, stdout=out)
+        return out.getvalue()
+
+    def test_mp4_duration_reader(self):
+        from autopost.management.commands.autopost_import import mp4_duration
+        self.assertAlmostEqual(mp4_duration(self.root / "01_Episodes/EP04_Eiffel/EP04_Eiffel_3D_9x16_voice.mp4"), 42.5)
+
+    def test_subtitle_picks_the_matching_cut(self):
+        self.run_import()
+        clip = Clip.objects.get(episode=4)
+        self.assertIn("3D_9x16_voice", clip.video.name)             # 43 s cut, not the 60 s one
+        self.assertIn("EP04_3D_43s_subtitle_TH", clip.subtitle_th.name)
+        self.assertEqual(clip.title, "ຍອດຫໍໄອເຟລ ເຄື່ອນທີ່ທຸກມື້!")
+        self.assertEqual(clip.description, "ເຫຼັກຂະຫຍາຍຕົວ")
+        self.assertEqual(clip.hashtags, "#ບອກຕໍ່ຄວາມຮູ້ #ຮູ້ບໍ່EP4 #shorts")
+        self.assertEqual((clip.category, clip.status, clip.source), ("ວິສະວະກຳ", Clip.Status.READY, "EP04_Eiffel"))
+
+    def test_voiceover_fallback_and_draft(self):
+        self.run_import()
+        ep1 = Clip.objects.get(episode=1)
+        self.assertEqual(ep1.title, "ຮູ້ບໍ່ວ່າ 1 ມື້ ຍາວກວ່າ 1 ປີ?")
+        self.assertEqual(ep1.description, "ນັ້ນຄື ດາວພະສຸກ.")          # closing call-to-action dropped
+        self.assertEqual(ep1.hashtags, "#ບອກຕໍ່ຄວາມຮູ້ #ຮູ້ບໍ່EP1 #ອາວະກາດ #shorts")
+        self.assertFalse(ep1.subtitle_th)
+        mekong = Clip.objects.get(source="Extra_Mekong_MapStory")
+        self.assertEqual(mekong.status, Clip.Status.DRAFT)
+
+    def test_import_is_idempotent_and_matches_manual_clips(self):
+        manual = make_clip(episode=4, status=Clip.Status.READY)
+        out = self.run_import()
+        self.assertIn("exists", out)
+        self.assertEqual(Clip.objects.filter(episode=4).count(), 1)
+        self.run_import()
+        self.assertEqual(Clip.objects.count(), 3)
+        self.run_import("--update")
+        manual.refresh_from_db()
+        self.assertEqual(manual.source, "EP04_Eiffel")
+        self.assertTrue(manual.subtitle_th)
+        self.assertEqual(manual.video.name.rsplit("/", 1)[-1][:1], "t")  # video untouched
+
+    def test_dry_run_saves_nothing(self):
+        self.assertIn("dry run", self.run_import("--dry-run"))
+        self.assertEqual(Clip.objects.count(), 0)
