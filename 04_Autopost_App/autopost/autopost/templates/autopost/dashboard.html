@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="lo">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ບອກຕໍ່ຄວາມຮູ້ · Auto Post</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Lao:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root { --bg:#070b1a; --card:#111833; --line:#243055; --text:#fff4de; --muted:#96a0be; --amber:#ffb547; --cyan:#5ad1ff; --red:#ff5c5c; --green:#6ee196; }
+  * { box-sizing:border-box }
+  body { margin:0; background:var(--bg); color:var(--text); font:15px/1.5 "Noto Sans Lao", system-ui, sans-serif; }
+  main { max-width:1000px; margin:0 auto; padding:24px 16px 60px; }
+  h1 { font-size:24px; margin:0 0 4px } h1 b { color:var(--amber) }
+  h2 { font-size:17px; margin:28px 0 10px; color:var(--amber) }
+  .muted { color:var(--muted) } a { color:var(--cyan) }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px }
+  .ok { color:var(--green) } .bad { color:var(--red) }
+  table { width:100%; border-collapse:collapse; font-size:14px } td,th { padding:8px 6px; border-bottom:1px solid var(--line); text-align:left; vertical-align:top }
+  th { color:var(--muted); font-weight:400 }
+  .btn { display:inline-block; border:0; border-radius:8px; padding:6px 12px; font:inherit; cursor:pointer; background:var(--amber); color:#070b1a; text-decoration:none }
+  .btn.ghost { background:transparent; color:var(--cyan); border:1px solid var(--line) }
+  form.inline { display:inline }
+  .msg { padding:10px 12px; border-radius:8px; margin:8px 0; background:var(--card); border-left:4px solid var(--cyan) }
+  .msg.error { border-color:var(--red) }
+  .formgrid p { margin:0 0 10px } .formgrid label { display:block; color:var(--muted); font-size:13px }
+  .formgrid input, .formgrid textarea { width:100%; background:#0b1126; color:var(--text); border:1px solid var(--line); border-radius:8px; padding:8px }
+  code { background:#0b1126; padding:2px 6px; border-radius:6px }
+</style>
+</head>
+<body><main>
+  <h1>ບອກຕໍ່<b>ຄວາມຮູ້</b> · Auto Post</h1>
+  <div class="muted">ສັ່ງໂພສ YouTube · Facebook · TikTok ຜ່ານ LINE / WhatsApp ຫຼື ຈາກໜ້ານີ້</div>
+  {% for m in messages %}<div class="msg {{ m.tags }}">{{ m }}</div>{% endfor %}
+
+  <h2>ບັນຊີທີ່ເຊື່ອມຕໍ່</h2>
+  <div class="grid">
+    {% for key, label, acc in platforms %}
+    <div class="card">
+      <b>{{ label }}</b><br>
+      {% if acc %}
+        <span class="{% if acc.enabled %}ok{% else %}muted{% endif %}">{% if acc.enabled %}● ເປີດໃຊ້{% else %}○ ປິດ{% endif %}</span> — {{ acc.name|default:acc.external_id }}<br>
+        <a class="btn ghost" href="{% url 'autopost:connect' key %}">ເຊື່ອມຕໍ່ໃໝ່</a>
+        <form class="inline" method="post" action="{% url 'autopost:toggle_account' key %}">{% csrf_token %}<button class="btn ghost">{% if acc.enabled %}ປິດ{% else %}ເປີດ{% endif %}</button></form>
+      {% else %}
+        <span class="bad">ຍັງບໍ່ໄດ້ເຊື່ອມຕໍ່</span><br>
+        <a class="btn" href="{% url 'autopost:connect' key %}">ເຊື່ອມຕໍ່</a>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+
+  <h2>ຜູ້ສັ່ງງານຜ່ານແຊັດ</h2>
+  <div class="card">
+    {% for op in operators %}<div>{{ op.get_channel_display }} · {{ op.name|default:op.external_id }} {% if not op.is_active %}<span class="muted">(ປິດ)</span>{% endif %}</div>
+    {% empty %}<div class="muted">ຍັງບໍ່ມີ. ເພີ່ມບອດເປັນໝູ່ໃນ LINE ຫຼື ທັກ WhatsApp ຂອງບອດ ແລ້ວສົ່ງ <code>pair &lt;ລະຫັດ&gt;</code>{% if not pair_code_set %} — <span class="bad">ຕ້ອງຕັ້ງ AUTOPOST_PAIR_CODE ກ່ອນ</span>{% endif %}</div>{% endfor %}
+  </div>
+
+  <h2>ຄິວຄລິບ</h2>
+  <div class="card">
+    <table>
+      <tr><th>ຄລິບ</th><th>ສະຖານະ</th><th></th></tr>
+      {% for c in queue %}
+      <tr><td>{{ c }}<br><span class="muted">{{ c.hashtags }}</span></td><td>{{ c.get_status_display }}</td>
+        <td>{% if c.status != 'posting' %}<form class="inline" method="post" action="{% url 'autopost:post_now' c.pk %}">{% csrf_token %}<button class="btn">ໂພສດຽວນີ້</button></form>{% endif %}</td></tr>
+      {% empty %}<tr><td colspan="3" class="muted">ຄິວຫວ່າງ</td></tr>{% endfor %}
+    </table>
+  </div>
+
+  <h2>ເພີ່ມຄລິບໃໝ່</h2>
+  <form class="card formgrid" method="post" enctype="multipart/form-data">{% csrf_token %}
+    {{ form.as_p }}
+    <button class="btn">ເພີ່ມເຂົ້າຄິວ</button>
+  </form>
+
+  <h2>ການໂພສລ່າສຸດ</h2>
+  <div class="card"><table>
+    <tr><th>ຄລິບ</th><th>ແພລັດຟອມ</th><th>ຜົນ</th></tr>
+    {% for p in recent %}
+    <tr><td>{{ p.clip }}</td><td>{{ p.get_platform_display }}</td>
+      <td>{% if p.status == 'done' %}<span class="ok">✓</span> {% if p.url %}<a href="{{ p.url }}" target="_blank" rel="noopener">ເປີດ</a>{% endif %} <span class="muted">{{ p.note }}</span>
+          {% elif p.status == 'failed' %}<span class="bad">✗ {{ p.error|truncatechars:160 }}</span>
+          {% else %}{{ p.get_status_display }} <span class="muted">(ຄັ້ງທີ {{ p.attempts }})</span>{% endif %}</td></tr>
+    {% empty %}<tr><td colspan="3" class="muted">ຍັງບໍ່ມີ</td></tr>{% endfor %}
+  </table></div>
+</main></body></html>

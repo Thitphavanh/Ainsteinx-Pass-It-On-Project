@@ -1,0 +1,62 @@
+{
+ "next_ep": 9,
+ "rotation": [
+  "ອາວະກາດ",
+  "ເຕັກໂນໂລຢີ",
+  "ຟີຊິກ",
+  "ອາວະກາດ",
+  "ສິລະປະ",
+  "ວິສະວະກຳ"
+ ],
+ "next_rotation_index": 0,
+ "done": [
+  {
+   "ep": 1,
+   "cat": "ອາວະກາດ",
+   "topic": "Venus"
+  },
+  {
+   "ep": 2,
+   "cat": "ສິລະປະ",
+   "topic": "Mona Lisa"
+  },
+  {
+   "ep": 3,
+   "cat": "ເຕັກໂນໂລຢີ",
+   "topic": "First computer bug"
+  },
+  {
+   "ep": 4,
+   "cat": "ວິສະວະກຳ",
+   "topic": "Eiffel Tower thermal expansion"
+  },
+  {
+   "ep": 5,
+   "cat": "ຟີຊິກ",
+   "topic": "Humanity in a sugar cube"
+  },
+  {
+   "ep": 6,
+   "cat": "ອາວະກາດ",
+   "topic": "1 light-year"
+  },
+  {
+   "ep": 7,
+   "cat": "ສິລະປະ",
+   "topic": "Leonardo da Vinci"
+  },
+  {
+   "ep": 8,
+   "cat": "ເຕັກໂນໂລຢີ",
+   "topic": "Python"
+  }
+ ],
+ "series_done": {
+  "ເຕັກໂນໂລຢີ": 0,
+  "ອາວະກາດ": 0,
+  "ຟີຊິກ": 0,
+  "ສິລະປະ": 0,
+  "ວິສະວະກຳ": 0
+ },
+ "proposed": []
+}
